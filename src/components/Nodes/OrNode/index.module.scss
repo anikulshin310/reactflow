@@ -1,0 +1,21 @@
+.wrapper {
+  display: flex;
+  justify-content: center;
+  width: 150px;
+}
+.start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  font-size: 12px;
+  position: relative;
+  .rotated {
+    width: 35px;
+    height: 35px;
+    border: 1px solid;
+    transform-origin: center center;
+    transform: rotate(45deg);
+  }
+}

@@ -1,0 +1,9 @@
+
+
+.drag-handle {
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #333;
+  border-radius: 3px;
+  cursor: grab;
+}
