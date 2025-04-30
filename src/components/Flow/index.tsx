@@ -37,26 +37,27 @@ export const FlowComponent = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  const [draggedNode, setDraggedNode] = useState<Node | null>(null);
-
   const addSubflow = useCallback(() => {
     const newSubflowId = `subflow-${Date.now()}`;
     const subflows = nodes.filter((n) => n.type === "subflow");
     const subflowCount = subflows.length;
 
-    const lastSubflowX = subflows.reduce((maxX, subflow) => {
-      return Math.max(maxX, subflow.position.x);
-    }, 0);
-    const lastSubflowY = subflows.reduce((maxX, subflow) => {
-      return Math.max(maxX, subflow.position.y);
-    }, 0);
+    // Находим последний сабфлоу
+    const lastSubflow = subflows[subflows.length - 1];
+    const startX = lastSubflow
+      ? lastSubflow.position.x + ((lastSubflow.style?.width as number) || 400)
+      : 0;
+
+    // Получаем высоту существующих сабфлоу
+    const existingHeight =
+      subflows.length > 0 ? subflows[0].style?.height || 700 : 700;
 
     const newSubflow: Subflow = {
       id: newSubflowId,
       type: "subflow",
       position: {
-        x: lastSubflowX + 400,
-        y: lastSubflowY,
+        x: startX,
+        y: 0,
       },
       data: {
         label: `Прикладная подсистема ${subflowCount + 1}`,
@@ -64,64 +65,47 @@ export const FlowComponent = () => {
       },
       draggable: false,
       style: {
-        border: "2px solid #555",
-        padding: "10px",
-        height: "100%",
+        padding: "0",
+        height: existingHeight,
         width: "400px",
       },
     };
 
-    setNodes((nds) => [...nds, newSubflow]);
+    // Добавляем новый сабфлоу и перерасполагаем все сабфлоу
+    const updatedNodes = [...nodes, newSubflow];
+    const sortedSubflows = [
+      ...updatedNodes.filter((n) => n.type === "subflow"),
+    ].sort((a, b) => a.position.x - b.position.x);
+
+    const finalNodes = updatedNodes.map((node) => {
+      if (node.type !== "subflow") return node;
+
+      const subflowIndex = sortedSubflows.findIndex((s) => s.id === node.id);
+      if (subflowIndex === 0) {
+        return {
+          ...node,
+          position: { x: 0, y: 0 },
+        };
+      }
+
+      const prevSubflow = sortedSubflows[subflowIndex - 1];
+      const prevWidth =
+        typeof prevSubflow.style?.width === "number"
+          ? prevSubflow.style.width
+          : parseInt(prevSubflow.style?.width as string) || 0;
+
+      return {
+        ...node,
+        position: {
+          x: prevSubflow.position.x + prevWidth,
+          y: 0,
+        },
+      };
+    });
+
+    setNodes(finalNodes);
   }, [nodes]);
 
-  const onNodeDragStart = useCallback((_: React.MouseEvent, node: Node) => {
-    setDraggedNode(node);
-  }, []);
-
-  const onNodeDrag = useCallback((_: React.MouseEvent, node: Node) => {
-    setNodes((nds) =>
-      nds.map((n) => (n.id === node.id ? { ...n, position: node.position } : n))
-    );
-  }, []);
-
-  const onNodeDragStop = useCallback(
-    async (e: React.MouseEvent, node: Node) => {
-      if (!draggedNode) return;
-
-      const position = screenToFlowPosition({
-        x: e.clientX,
-        y: e.clientY,
-      });
-      if (node.type !== "subflow") {
-        const targetSubflow = nodes.find(
-          (n) =>
-            n.type === "subflow" &&
-            position.x >= n.position.x &&
-            position.x <= n.position.x + 400 &&
-            position.y >= n.position.y &&
-            position.y <= n.position.y + Number(n.style?.height)
-        );
-
-        setNodes((nds) =>
-          nds.map((n) => {
-            if (n.id === node.id) {
-              if (targetSubflow?.id) {
-                return {
-                  ...n,
-                  parentId: targetSubflow?.id,
-                  extent: targetSubflow?.id ? "parent" : undefined,
-                };
-              }
-            }
-            return n;
-          })
-        );
-
-        setDraggedNode(null);
-      }
-    },
-    [draggedNode, nodes, edges, screenToFlowPosition]
-  );
   const applyLayoutToAllSubflows = useCallback(async () => {
     const subflows = nodes.filter((n) => n.type === "subflow");
     let updatedNodes = [...nodes];
@@ -139,35 +123,33 @@ export const FlowComponent = () => {
       e.dataTransfer.dropEffect = "move";
       const type = e.dataTransfer.getData("application/reactflow");
 
-      // 1. Находим subflow под курсором
+      // Обработка добавления новых узлов
       const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
-      const subflowId = dropTarget
+      const targetSubflowId = dropTarget
         ?.closest(".react-flow__node-subflow")
         ?.getAttribute("data-id");
-      if (!subflowId || !type) return;
+      if (!targetSubflowId || !type) return;
 
-      // 2. Преобразуем координаты мыши в координаты React Flow
       const flowPosition = screenToFlowPosition({
         x: e.clientX,
         y: e.clientY,
       });
 
-      // 3. Находим родительский subflow для корректировки позиции
-      const parentSubflow = nodes.find((n) => n.id === subflowId);
+      const parentSubflow = nodes.find((n) => n.id === targetSubflowId);
       if (!parentSubflow) return;
 
-      // 4. Корректируем позицию относительно subflow
+      // Вычисляем позицию относительно сабфлоу с учетом шапки
       const relativePosition = {
         x: flowPosition.x - parentSubflow.position.x,
-        y: flowPosition.y - parentSubflow.position.y,
+        y: flowPosition.y - parentSubflow.position.y - 50, // Учитываем высоту шапки
       };
 
       const newNode: Node = {
         id: `node-${Date.now()}`,
         type,
-        position: relativePosition, // Используем относительные координаты
+        position: relativePosition,
         data: { label: `${type} ${nodes.length}` },
-        parentId: subflowId,
+        parentId: targetSubflowId,
         extent: "parent",
         draggable: true,
       };
@@ -207,12 +189,9 @@ export const FlowComponent = () => {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onDrop={onDrop}
-        onNodeDragStart={onNodeDragStart}
-        onNodeDrag={onNodeDrag}
-        onNodeDragStop={onNodeDragStop}
         onDragOver={(e) => e.preventDefault()}
         nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes} // Добавляем правильные типы соединений
+        edgeTypes={edgeTypes}
         defaultEdgeOptions={{
           type: "step",
           style: { stroke: "#333", strokeWidth: 2 },

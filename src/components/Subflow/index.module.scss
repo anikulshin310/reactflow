@@ -1,3 +1,40 @@
 .subflow_container {
+  position: relative;
+  padding: 0;
+  height: 100%;
+  min-width: 200px;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease;
+  border: 1px solid #bdbdbd;
+  border-right: none;
 
+  &:last-child {
+    border-right: 1px solid #bdbdbd;
+  }
+}
+
+.subflow_content {
+  position: relative;
+  padding: 10px;
+  margin-top: 50px; // Height of the header
+  flex: 1;
+  min-height: calc(100% - 50px);
+}
+
+.drag_handle {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  cursor: move;
+  padding: 5px;
+  color: #666;
+  font-size: 16px;
+  user-select: none;
+  transition: color 0.2s ease;
+
+  &:hover {
+    color: #2196f3;
+  }
 }
